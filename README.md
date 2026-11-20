@@ -9,6 +9,18 @@ Built and checked on `xyz:XYZ100` (Hyperliquid's Nasdaq 100 perpetual), the prox
 - `ict-liquidity-map.wrun.ts` is the indicator.
 - `qa/` is the test harness: an independent reference, the values read out of the live indicator, and the comparison.
 
+## What it looks like
+
+Focus view on a 15m chart: the nearest untouched pool, the next day level beyond it, and the last raid.
+
+![Focus view, 15m](docs/focus-15m.png)
+
+Review view on 15m, 5m and 1h. The same levels on every timeframe.
+
+![Review view, 15m](docs/review-15m.png)
+![Review view, 5m](docs/review-5m.png)
+![Review view, 1h](docs/review-1h.png)
+
 ## Install
 
 1. Open a chart on openmarket.xyz, then Indicators, New indicator.
@@ -19,7 +31,7 @@ Built and checked on `xyz:XYZ100` (Hyperliquid's Nasdaq 100 perpetual), the prox
 
 | Colour | Meaning |
 |---|---|
-| Red line, runs right | Untouched buy-side liquidity (an old high above price) |
+| Amber line, runs right | Untouched buy-side liquidity (an old high above price) |
 | Green line, runs right | Untouched sell-side liquidity (an old low below price) |
 | Grey dashed line, stops at a candle | A day or week level that was raided, ending on the candle that raided it |
 | Dim dotted line, stops at a candle | A session level that was raided |

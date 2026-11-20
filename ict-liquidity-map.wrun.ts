@@ -53,8 +53,8 @@ param.color("swept_dim_color", "#5D606B", { label: "Swept (session)", when: "kee
 param.bool("show_hud", true, { label: "Draw on liquidity readout", description: "Top-right: the nearest untouched pool above and below" });
 param.bool("tag_prices", true, { label: "Price in tags" });
 param.int("tag_size", 11, { min: 8, max: 20, label: "Tag size" });
-param.int("key_width", 2, { min: 1, max: 4, label: "Day / week / $$$ line width" });
-param.color("bsl_color", "#F23645", { label: "Buy-side (highs)" });
+param.int("key_width", 1, { min: 1, max: 4, label: "Day / week / $$$ line width" });
+param.color("bsl_color", "#E0A070", { label: "Buy-side (highs)" });
 param.color("ssl_color", "#089981", { label: "Sell-side (lows)" });
 param.color("mo_color", "#B2B5BE", { label: "Midnight open", when: "show_mo" });
 
