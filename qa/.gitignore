@@ -1,0 +1,4 @@
+qa-build.wrun.ts
+qa-transform.js
+__pycache__/
+*.json

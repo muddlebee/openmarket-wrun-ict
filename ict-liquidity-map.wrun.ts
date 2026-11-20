@@ -7,13 +7,19 @@
 // A corner readout names the nearest untouched pool on each side: the draw on liquidity.
 // Two views. Focus (default): at most 5 lines for a live decision. Review: the full map, where session
 // detail fades with age (raided today or yesterday) and day / week levels keep a few days of raid history.
+//
+// Where the numbers come from. Levels must not depend on the chart's timeframe, so on a 15m to 2h chart the
+// engine runs on 15m candles, the one still forming included (a 1h bar cannot see a 09:30 session open);
+// below 15m it runs on the chart's own bars, after 15m history for the days the chart has not loaded.
+// A day, week or session becomes a level only when it was seen from its first candle.
+// 4h charts and above are off: their bars straddle the 18:00 rollover.
 
 section("View");
 param.choice("view", ["Focus", "Review"], "Focus", { label: "View", description: "Focus: at most 5 lines. The nearest untouched pool above and below price, the next day / week level beyond each, and the last sweep. Review: the full map with every session level and sweep, for going back over a day" });
 
 section("Trading day");
-param.choice("day_mode", ["Market trade date (auto)", "CME day 18:00-17:00 New York", "New York midnight"], "CME day 18:00-17:00 New York", { label: "Day starts", description: "ICT uses the CME day (18:00 to 17:00 New York) for indices like NQ and XYZ100. Auto takes the exchange's own date (US stocks the New York date, crypto the UTC date)" });
-param.bool("rth_only", false, { label: "Regular hours only", description: "Build day and week levels from regular-session bars only (stocks: 09:30 to 16:00)" });
+param.choice("day_mode", ["UTC midnight", "CME day 18:00-17:00 New York", "New York midnight"], "CME day 18:00-17:00 New York", { label: "Day starts", description: "ICT uses the CME day (18:00 to 17:00 New York, weekends off) for indices like NQ and XYZ100. New York midnight suits US stocks, UTC midnight suits crypto" });
+param.bool("rth_only", false, { label: "Regular hours only", description: "Build day and week levels from 09:30 to 16:00 New York, Monday to Friday, only" });
 
 section("Day and week");
 param.bool("show_daily", true, { label: "Previous day high / low (PDH / PDL)" });
@@ -53,11 +59,13 @@ param.color("ssl_color", "#089981", { label: "Sell-side (lows)" });
 param.color("mo_color", "#B2B5BE", { label: "Midnight open", when: "show_mo" });
 
 input("high", ohlcv.high);
-input("tdate", time.trade_date);
-input("tsess", time.session);
-// 15m candles from about two weeks back, so day, week and session levels never depend on how much
-// history the chart happens to load. Charts at 1h and up load enough of their own and skip it.
-input("hist", candles.cells, { interval: "15m", bars: 1500, max_cells: 5000, chart_interval_below: "1h" });
+// 15m candles from about two weeks back: the engine's candles on a 15m to 2h chart, and the history
+// before the first bar on a finer one. Not fetched on 4h and above, where the indicator is off.
+input("hist", candles.cells, { interval: "15m", bars: 1500, max_cells: 5000, chart_interval_below: "4h" });
+// The 15m candle still forming, on the live bar only: a level appears the moment its period ends and a
+// raid shows as it happens, instead of when the candle closes.
+input("live", candles.cells, { interval: "15m", view: "forming", max_cells: 1 });
+chart.interval_sec();
 const bslGate = output("bsl_swept", none, overlay, { description: "1 on a bar that sweeps buy-side liquidity" });
 const sslGate = output("ssl_swept", none, overlay, { description: "1 on a bar that sweeps sell-side liquidity" });
 output("nearest_bsl", none, overlay, { description: "The closest untouched buy-side level above the close" });
@@ -78,6 +86,7 @@ const EQH = 12; const EQL = 13; const ODH = 14; const ODL = 15;
 const KINDS = 16;
 const NAMES = ["PDH", "PDL", "PWH", "PWL", "Asia H", "Asia L", "London H", "London L", "NY AM H", "NY AM L", "NY PM H", "NY PM L", "EQH $$$", "EQL $$$", "H", "L"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const EQ_MASK: i32 = (1 << EQH) | (1 << EQL);
 const SESSION_MASK: i32 = (1 << ASH) | (1 << ASL) | (1 << LOH) | (1 << LOL) | (1 << AMH) | (1 << AML) | (1 << PMH) | (1 << PML);
 
 // ---- The level pool: one line handle and one label handle per slot ----
@@ -149,8 +158,12 @@ const asiaR = new HiLo(); const londonR = new HiLo(); const amR = new HiLo(); co
 let curDay: f64 = NaN; let curWeek: f64 = NaN; let lastPruned: f64 = NaN;
 let seq: i32 = 0; let moT: f64 = NaN; let moPrice: f64 = NaN;
 let dayNo: f64 = 0.0; // trading days seen so far: weekends and holidays do not age a level
-let t: f64 = NaN; let prevT: f64 = NaN; let width: f64 = NaN;
-let nowT: f64 = NaN; // the candle the engine is on
+let t: f64 = NaN;        // the chart bar being evaluated
+let nowT: f64 = NaN;     // the same, for drawing
+let barSec: f64 = NaN;   // the chart's interval in seconds
+let lastFed: f64 = NaN;  // the newest candle the engine has taken
+let handover: f64 = NaN; // a fine chart: where 15m history ends and the chart's own bars take over
+let started = false;
 
 function pad2(n: i32): string { return n < 10 ? "0" + n.toString() : n.toString(); }
 function spec(startMin: f64, endMin: f64): string {
@@ -160,6 +173,7 @@ function spec(startMin: f64, endMin: f64): string {
 
 function onStart(): void {
   showAll = i32(p_view());
+  barSec = p_chart_interval_sec();
   dayMode = i32(p_day_mode()); rthOnly = pb_rth_only();
   showDaily = pb_show_daily(); oldDays = i32(p_old_days()); showWeekly = pb_show_weekly(); showMo = showAll == 1 && pb_show_mo();
   showAsia = pb_show_asia(); showLondon = pb_show_london(); showAm = pb_show_am(); showPm = pb_show_pm();
@@ -305,7 +319,11 @@ function addLevel(kind: i32, price: f64, ts: f64, now: f64, wd: i32): void {
   for (let j = 0; j < cap; j += 1) {
     if (unchecked(lvState[j]) != 1 || unchecked(lvHigh[j]) != high) continue;
     if (Math.abs(unchecked(lvPrice[j]) - price) > near) continue;
-    lvMask[j] = unchecked(lvMask[j]) | bit(kind);
+    const had = unchecked(lvMask[j]);
+    lvMask[j] = had | bit(kind);
+    // A named level landing on a line that so far was only equal highs / lows takes the line over:
+    // it starts at the level's own candle and ages as that level, whatever the chart's swings were.
+    if ((had & ~EQ_MASK) == 0 && kind != EQH && kind != EQL) { lvTs[j] = ts; lvForm[j] = curDay; lvFormNo[j] = dayNo; }
     if (kind == PDH || kind == PDL) lvWd[j] = wd;
     return;
   }
@@ -324,7 +342,8 @@ function addLevel(kind: i32, price: f64, ts: f64, now: f64, wd: i32): void {
 
 function sweepLevel(i: i32, now: f64): void {
   if (!keepSwept) { freeSlot(i); return; }
-  lvState[i] = 2; lvSweptDay[i] = dayNo; lvSweptTs[i] = now; lvSweptHm[i] = clock.hour() * 60 + clock.minute();
+  const local = now + f64(clock.offsetSec()); // New York wall time of the sweep candle
+  lvState[i] = 2; lvSweptDay[i] = dayNo; lvSweptTs[i] = now; lvSweptHm[i] = i32(Math.floor(local / 60.0) % 1440.0);
 }
 
 // Once a trading day: detail fades with age.
@@ -365,9 +384,9 @@ function trackSession(s: Session, r: HiLo, h: f64, l: f64, t: f64): void {
   r.add(h, l, t);
 }
 
-// The trading day this bar belongs to, as days since 1970-01-01, or NaN when the bar sits outside every day.
-function dayKeyOf(t: f64, tdate: f64): f64 {
-  const local = t + f64(clock.offsetSec()); // New York wall time, in seconds
+// The trading day a candle belongs to, as days since 1970-01-01, or NaN when it sits outside every day.
+// `local` is the candle's New York wall time in seconds.
+function dayKeyOf(t: f64, local: f64): f64 {
   if (dayMode == 1) {
     if (clock.hour() == 17) return NaN; // the CME daily break
     const key = Math.floor((local + 6.0 * 3600.0) / 86400.0); // 18:00 New York opens the next day
@@ -376,7 +395,7 @@ function dayKeyOf(t: f64, tdate: f64): f64 {
     return key;
   }
   if (dayMode == 2) return Math.floor(local / 86400.0);
-  return isNaN(tdate) ? Math.floor(local / 86400.0) : Math.floor(tdate / 86400.0);
+  return Math.floor(t / 86400.0);
 }
 function weekdayOf(key: f64): i32 { return i32((key + 4.0) % 7.0); }
 
@@ -391,14 +410,29 @@ function hudName(i: i32): void {
   }
 }
 
-// One candle through the engine: the chart's own bars, and before them the 15m history.
-// Equal highs / lows and the outputs run on chart bars only, after this.
-function step(t: f64, o: f64, h: f64, l: f64, c: f64, tdate: f64, tsess: f64, coarse: bool): void {
+// Sweeps: a candle trading through an untouched level. `at` is the candle's open.
+function sweepCheck(h: f64, l: f64, at: f64): void {
+  for (let i = 0; i < cap; i += 1) {
+    if (unchecked(lvState[i]) != 1) continue;
+    const price = unchecked(lvPrice[i]);
+    if (unchecked(lvHigh[i]) == 1) {
+      if (h > price) { sweepLevel(i, at); bslHit = 1; }
+    } else if (l < price) { sweepLevel(i, at); sslHit = 1; }
+  }
+}
+
+// One candle through the engine, oldest first: a 15m candle, or a chart bar on a chart finer than 15m.
+function step(t: f64, o: f64, h: f64, l: f64): void {
   clock.update(t);
-  nowT = t;
-  // 1. Close what ended before this bar: its highs and lows become levels.
-  const dk = dayKeyOf(t, tdate);
-  const counted = !isNaN(dk) && (!rthOnly || tsess == 1.0);
+  const local = t + f64(clock.offsetSec()); // New York wall time, in seconds
+  // 1. Close what ended before this candle: its highs and lows become levels.
+  const dk = dayKeyOf(t, local);
+  let counted = !isNaN(dk);
+  if (counted && rthOnly) {
+    const mins = clock.hour() * 60 + clock.minute();
+    const wd = weekdayOf(Math.floor(local / 86400.0));
+    counted = wd >= 1 && wd <= 5 && mins >= 570 && mins < 960;
+  }
   if (counted && dk != curDay) {
     if (!isNaN(curDay)) closeRange(dayR, PDH, PDL, showDaily, t, weekdayOf(curDay));
     dayR.full = !isNaN(curDay); // the first day seen started before the data did
@@ -413,30 +447,40 @@ function step(t: f64, o: f64, h: f64, l: f64, c: f64, tdate: f64, tsess: f64, co
   }
   if (!isNaN(curDay) && curDay != lastPruned) { dailyUpkeep(); lastPruned = curDay; }
   asiaSess.update(t); londonSess.update(t); amSess.update(t); pmSess.update(t);
-  if (asiaSess.closed()) closeRange(asiaR, ASH, ASL, showAsia && !coarse, t, 0);
-  if (londonSess.closed()) closeRange(londonR, LOH, LOL, showLondon && !coarse, t, 0);
-  if (amSess.closed()) closeRange(amR, AMH, AML, showAm && !coarse, t, 0);
-  if (pmSess.closed()) closeRange(pmR, PMH, PML, showPm && !coarse, t, 0);
+  if (asiaSess.closed()) closeRange(asiaR, ASH, ASL, showAsia, t, 0);
+  if (londonSess.closed()) closeRange(londonR, LOH, LOL, showLondon, t, 0);
+  if (amSess.closed()) closeRange(amR, AMH, AML, showAm, t, 0);
+  if (pmSess.closed()) closeRange(pmR, PMH, PML, showPm, t, 0);
 
-  // 2. New York midnight open: the open of the bar that holds 00:00.
-  if (showMo && !coarse && clock.isNewDay() && clock.hour() == 0) { moT = t; moPrice = o; }
+  // 2. New York midnight open: the open of the candle that holds 00:00.
+  if (showMo && clock.isNewDay() && clock.hour() == 0) { moT = t; moPrice = o; }
 
-  // 3. Sweeps: this candle trading through an untouched level.
-  for (let i = 0; i < cap; i += 1) {
-    if (unchecked(lvState[i]) != 1) continue;
-    const price = unchecked(lvPrice[i]);
-    if (unchecked(lvHigh[i]) == 1) {
-      if (h > price) { sweepLevel(i, t); bslHit = 1; }
-    } else if (l < price) { sweepLevel(i, t); sslHit = 1; }
-  }
+  // 3. Sweeps.
+  sweepCheck(h, l, t);
 
-  // 4. Grow the open day, week and sessions with this bar.
+  // 4. Grow the open day, week and sessions with this candle.
   if (counted) { dayR.add(h, l, t); weekR.add(h, l, t); }
   trackSession(asiaSess, asiaR, h, l, t);
   trackSession(londonSess, londonR, h, l, t);
   trackSession(amSess, amR, h, l, t);
   trackSession(pmSess, pmR, h, l, t);
+}
 
+// Hand the engine the 15m candles this bar carries, oldest first. With `before` set, only the candles
+// that closed at or before it (the history ahead of a fine chart's first bar).
+function feed(before: f64): void {
+  const n = in_hist_cells();
+  if (n <= 0) return;
+  const v = in_hist_view();
+  const tuples = v.length >= n * 6 ? n : n / 6;
+  for (let k = 0; k < tuples; k += 1) {
+    const b = k * 6;
+    const ct = t + unchecked(v[b]) / 1000.0; // the candle's open: the bar's open plus its offset
+    if (!isNaN(before) && ct + 900.0 > before) continue;
+    if (!isNaN(lastFed) && ct <= lastFed) continue; // never the same candle twice, never backwards
+    lastFed = ct;
+    step(ct, unchecked(v[b + 1]), unchecked(v[b + 2]), unchecked(v[b + 3]));
+  }
 }
 
 // The newest bar draws the chart. Review draws every level; Focus keeps only what a decision needs:
@@ -485,40 +529,53 @@ function render(c: f64): void {
   }
 }
 
-let backfilled = false;
 let bslHit = 0; let sslHit = 0;
 
 function onBar(): void {
-  prevT = t;
   t = bar.time();
-  if (!isNaN(prevT) && t > prevT && (isNaN(width) || t - prevT < width)) width = t - prevT;
+  nowT = t;
   const o = bar.open();
   const h = bar.high();
   const l = bar.low();
   const c = bar.close();
   if (isNaN(h) || isNaN(l)) return;
 
-  // Before the first chart bar: run the 15m history that ends before it.
-  if (!backfilled) {
-    backfilled = true;
-    const n = in_hist_cells();
-    if (n > 0) {
-      const v = in_hist_view();
-      const tuples = v.length >= n * 6 ? n : n / 6;
-      for (let k = 0; k < tuples; k += 1) {
-        const b = k * 6;
-        const ct = t + unchecked(v[b]) / 1000.0;
-        if (ct + 900.0 > t) continue; // only candles that closed before the chart's first bar
-        step(ct, unchecked(v[b + 1]), unchecked(v[b + 2]), unchecked(v[b + 3]), unchecked(v[b + 4]), NaN, 1.0, false);
-      }
+  // 4h and above: off. Those bars straddle the 18:00 New York rollover, so their day levels would be wrong.
+  if (barSec >= 14400.0) {
+    out_bsl_swept(0.0); out_ssl_swept(0.0); out_nearest_bsl(NaN); out_nearest_ssl(NaN);
+    if (bar.isLast()) {
+      sb_clear(); sb_text("ICT Liquidity Map: use a 1h chart or lower");
+      hudTag.set(16, 40).text(str_hud_sb).anchor(ANCHOR_TOP_RIGHT).align(ALIGN_RIGHT).size(tagSize).color(rgba(209, 212, 220, 255));
     }
+    return;
   }
 
+  bslHit = 0; sslHit = 0;
+  if (barSec < 900.0) {
+    // Finer than 15m: 15m history first, then the chart's own bars. The switch sits on a boundary both
+    // share, so no minute falls between the last 15m candle and the first chart bar.
+    if (!started) {
+      if (isNaN(handover)) {
+        let step15 = 900.0;
+        while (step15 % barSec != 0.0 && step15 < 86400.0) step15 += 900.0;
+        handover = Math.ceil(t / step15) * step15;
+      }
+      feed(handover);
+      if (t >= handover) started = true;
+    }
+    if (started) { lastFed = t; step(t, o, h, l); }
+  } else {
+    // 15m to 2h: the 15m candles this bar carries are the engine's candles, so every timeframe agrees.
+    feed(NaN);
+    // The live bar also carries the 15m candle still forming.
+    if (in_live_cells() > 0) {
+      const v = in_live_view();
+      const ct = t + unchecked(v[0]) / 1000.0;
+      if (isNaN(lastFed) || ct > lastFed) { lastFed = ct; step(ct, unchecked(v[1]), unchecked(v[2]), unchecked(v[3])); }
+    }
+  }
   times[barIdx % TIMES] = t;
   barIdx += 1;
-  const coarse = !isNaN(width) && width >= 14400.0; // 4h and up: sessions are one or two bars, skip them
-  bslHit = 0; sslHit = 0;
-  step(t, o, h, l, c, in_tdate(), in_tsess(), coarse);
   const bsl = bslHit; const ssl = sslHit;
 
   // 5. Equal highs / lows from confirmed swings that are still intact.
