@@ -36,7 +36,8 @@ Review view on 15m, 5m and 1h. The same levels on every timeframe.
 | Grey dashed line, stops at a candle | A day or week level that was raided, ending on the candle that raided it |
 | Dim dotted line, stops at a candle | A session level that was raided |
 
-Tags read `PDH 27764`, `Wed H 27530 01:30` (Wednesday's high, raided at 01:30 New York), `Thu London L 09:45`.
+Tags read `PDH`, `Wed H 01:30` (Wednesday's high, raided at 01:30 New York), `Thu London L 09:45`. Prices are
+left to the price scale; "Price in tags" in the settings puts them back (`PDH 27764`).
 A corner readout names the nearest untouched pool on each side.
 
 Two views:

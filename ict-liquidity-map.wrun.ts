@@ -51,7 +51,7 @@ param.int("swept_days", 3, { min: 1, max: 5, label: "History kept (days)", descr
 param.color("swept_color", "#9598A1", { label: "Swept (day / week)", when: "keep_swept" });
 param.color("swept_dim_color", "#5D606B", { label: "Swept (session)", when: "keep_swept" });
 param.bool("show_hud", true, { label: "Draw on liquidity readout", description: "Top-right: the nearest untouched pool above and below" });
-param.bool("tag_prices", true, { label: "Price in tags" });
+param.bool("tag_prices", false, { label: "Price in tags" });
 param.int("tag_size", 11, { min: 8, max: 20, label: "Tag size" });
 param.int("key_width", 1, { min: 1, max: 4, label: "Day / week / $$$ line width" });
 param.color("bsl_color", "#E0A070", { label: "Buy-side (highs)" });
