@@ -6,6 +6,9 @@
 // into a grey dashed line that ends on the sweep candle, so the day's raids stay readable, and clears later.
 // A corner readout names the nearest untouched pool on each side: the draw on liquidity.
 
+section("View");
+param.choice("view", ["Focus", "Review"], "Focus", { label: "View", description: "Focus: at most 5 lines. The nearest untouched pool above and below price, the next day / week level beyond each, and the last sweep. Review: the full map with every session level and sweep, for going back over a day" });
+
 section("Trading day");
 param.choice("day_mode", ["Market trade date (auto)", "CME day 18:00-17:00 New York", "New York midnight"], "CME day 18:00-17:00 New York", { label: "Day starts", description: "ICT uses the CME day (18:00 to 17:00 New York) for indices like NQ and XYZ100. Auto takes the exchange's own date (US stocks the New York date, crypto the UTC date)" });
 param.bool("rth_only", false, { label: "Regular hours only", description: "Build day and week levels from regular-session bars only (stocks: 09:30 to 16:00)" });
@@ -87,6 +90,7 @@ const lvSweptTs = new StaticArray<f64>(MAXL);
 const lvSweptHm = new StaticArray<i32>(MAXL); // New York clock minute of the sweep
 const lvForm = new StaticArray<f64>(MAXL);   // the trading day the level formed in
 const lvTagged = new StaticArray<i32>(MAXL); // 1 while its label handle exists
+const lvDrawn = new StaticArray<i32>(MAXL);  // 1 while its line handle exists
 
 function makeLines(first: i32, count: i32): LineHandle[] { const out: LineHandle[] = []; for (let i = 0; i < count; i += 1) out.push(draw.line(first + i)); return out; }
 function makeLabels(first: i32, count: i32): LabelHandle[] { const out: LabelHandle[] = []; for (let i = 0; i < count; i += 1) out.push(draw.label(first + i)); return out; }
@@ -118,7 +122,7 @@ const times = new StaticArray<f64>(TIMES);
 let barIdx: i32 = 0;
 
 // ---- Settings ----
-let dayMode: i32 = 1; let rthOnly = false;
+let review = false; let dayMode: i32 = 1; let rthOnly = false;
 let showDaily = true; let oldDays: i32 = 3; let showWeekly = true; let showMo = true;
 let showAsia = true; let showLondon = true; let showAm = true; let showPm = false;
 let showEqual = true; let tol: f64 = 0.0003; let swingLen: i32 = 3; let eqKeep: i32 = 3;
@@ -139,6 +143,7 @@ const asiaR = new HiLo(); const londonR = new HiLo(); const amR = new HiLo(); co
 let curDay: f64 = NaN; let curWeek: f64 = NaN; let lastPruned: f64 = NaN;
 let seq: i32 = 0; let moShown = false;
 let t: f64 = NaN; let prevT: f64 = NaN; let width: f64 = NaN;
+let nowT: f64 = NaN; // the candle the engine is on
 
 function pad2(n: i32): string { return n < 10 ? "0" + n.toString() : n.toString(); }
 function spec(startMin: f64, endMin: f64): string {
@@ -147,6 +152,7 @@ function spec(startMin: f64, endMin: f64): string {
 }
 
 function onStart(): void {
+  review = i32(p_view()) == 1;
   dayMode = i32(p_day_mode()); rthOnly = pb_rth_only();
   showDaily = pb_show_daily(); oldDays = i32(p_old_days()); showWeekly = pb_show_weekly(); showMo = pb_show_mo();
   showAsia = pb_show_asia(); showLondon = pb_show_london(); showAm = pb_show_am(); showPm = pb_show_pm();
@@ -196,25 +202,45 @@ function writeTag(i: i32, swept: bool): void {
   }
 }
 
-function styleLive(i: i32): void {
+// Draw slot i from its state. A live level runs right with its tag by the price axis; a swept one is a
+// grey dashed line that stops on the sweep candle. Review draws every slot as it changes; Focus draws
+// only its chosen few, on the newest bar (renderFocus).
+function paint(i: i32): void {
+  const price = unchecked(lvPrice[i]);
+  const ts = unchecked(lvTs[i]);
   const line = lines[i];
-  line.color(inkOf(i));
-  if (isSessionOnly(unchecked(lvMask[i]))) line.width(1.0).style(LineStyle.Dotted);
-  else line.width(keyWidth).style(LineStyle.Solid);
+  if (unchecked(lvState[i]) == 1) {
+    const x2 = nowT > ts ? nowT : ts + 1.0;
+    line.set(ts, price, x2, price).extend(Extend.Right).color(inkOf(i));
+    if (isSessionOnly(unchecked(lvMask[i]))) line.width(1.0).style(LineStyle.Dotted);
+    else line.width(keyWidth).style(LineStyle.Solid);
+    writeTag(i, false);
+    tags[i].set(x2, price).text(str_tag_sb).color(inkOf(i)).size(tagSize).align(ALIGN_RIGHT).valign(VALIGN_MIDDLE).stickyRight(true);
+    lvTagged[i] = 1;
+  } else {
+    const end = unchecked(lvSweptTs[i]);
+    line.set(ts, price, end, price).extend(Extend.None).color(sweptInk).style(LineStyle.Dashed).width(1.0);
+    if (sweptTags) {
+      writeTag(i, true);
+      tags[i].set(end, price).text(str_tag_sb).color(sweptInk).stickyRight(false).align(ALIGN_LEFT).valign(unchecked(lvHigh[i]) == 1 ? VALIGN_BOTTOM : VALIGN_TOP).size(tagSize - 1);
+      lvTagged[i] = 1;
+    } else if (unchecked(lvTagged[i]) == 1) { tags[i].delete(); lvTagged[i] = 0; }
+  }
+  lvDrawn[i] = 1;
 }
 
-function retag(i: i32): void {
-  const st = unchecked(lvState[i]);
-  if (st == 1) {
-    styleLive(i);
-    if (unchecked(lvTagged[i]) == 1) { writeTag(i, false); tags[i].text(str_tag_sb); }
-  } else if (st == 2 && unchecked(lvTagged[i]) == 1) { writeTag(i, true); tags[i].text(str_tag_sb); }
+function unpaint(i: i32): void {
+  if (unchecked(lvDrawn[i]) == 0) return;
+  lines[i].delete();
+  if (unchecked(lvTagged[i]) == 1) { tags[i].delete(); lvTagged[i] = 0; }
+  lvDrawn[i] = 0;
 }
+
+function retag(i: i32): void { if (review && unchecked(lvState[i]) != 0) paint(i); }
 
 function freeSlot(i: i32): void {
   if (unchecked(lvState[i]) == 0) return;
-  lines[i].delete();
-  if (unchecked(lvTagged[i]) == 1) { tags[i].delete(); lvTagged[i] = 0; }
+  unpaint(i);
   lvState[i] = 0;
 }
 
@@ -281,23 +307,13 @@ function addLevel(kind: i32, price: f64, ts: f64, now: f64, wd: i32): void {
   }
   lvPrice[i] = price; lvTs[i] = ts; lvMask[i] = bit(kind); lvHigh[i] = high; lvState[i] = 1;
   lvSeq[i] = seq; seq += 1; lvWd[i] = wd; lvForm[i] = curDay;
-  const x2 = now > ts ? now : ts + 1.0;
-  lines[i].set(ts, price, x2, price).extend(Extend.Right);
-  styleLive(i);
-  writeTag(i, false);
-  tags[i].set(x2, price).text(str_tag_sb).color(inkOf(i)).size(tagSize).align(ALIGN_RIGHT).valign(VALIGN_MIDDLE).stickyRight(true);
-  lvTagged[i] = 1;
+  if (review) paint(i);
 }
 
 function sweepLevel(i: i32, now: f64): void {
   if (!keepSwept) { freeSlot(i); return; }
-  const price = unchecked(lvPrice[i]);
   lvState[i] = 2; lvSweptDay[i] = curDay; lvSweptTs[i] = now; lvSweptHm[i] = clock.hour() * 60 + clock.minute();
-  lines[i].setXy2(now, price).extend(Extend.None).color(sweptInk).style(LineStyle.Dashed).width(1.0);
-  if (sweptTags) {
-    writeTag(i, true);
-    tags[i].set(now, price).text(str_tag_sb).color(sweptInk).stickyRight(false).align(ALIGN_LEFT).valign(unchecked(lvHigh[i]) == 1 ? VALIGN_BOTTOM : VALIGN_TOP).size(tagSize - 1);
-  } else if (unchecked(lvTagged[i]) == 1) { tags[i].delete(); lvTagged[i] = 0; }
+  if (review) paint(i);
 }
 
 // Once a day: drop history past its window, and rename session levels that just became yesterday's.
@@ -366,6 +382,7 @@ function hudName(i: i32): void {
 // Equal highs / lows and the outputs run on chart bars only, after this.
 function step(t: f64, o: f64, h: f64, l: f64, c: f64, tdate: f64, tsess: f64, coarse: bool): void {
   clock.update(t);
+  nowT = t;
   // 1. Close what ended before this bar: its highs and lows become levels.
   const dk = dayKeyOf(t, tdate);
   const counted = !isNaN(dk) && (!rthOnly || tsess == 1.0);
@@ -388,7 +405,7 @@ function step(t: f64, o: f64, h: f64, l: f64, c: f64, tdate: f64, tsess: f64, co
   if (pmSess.closed()) closeRange(pmR, PMH, PML, showPm && !coarse, t, 0);
 
   // 2. New York midnight open: the open of the bar that holds 00:00.
-  if (showMo && !coarse && clock.isNewDay() && clock.hour() == 0) {
+  if (review && showMo && !coarse && clock.isNewDay() && clock.hour() == 0) {
     moLine.set(t, o, t + 60.0, o).color(moInk).width(1.0).style(LineStyle.Dashed).extend(Extend.Right);
     sb_clear(); sb_text("Midnight open");
     if (tagPrices) { sb_text(" "); sb_f64(o, 2); }
@@ -412,6 +429,39 @@ function step(t: f64, o: f64, h: f64, l: f64, c: f64, tdate: f64, tsess: f64, co
   trackSession(amSess, amR, h, l, t);
   trackSession(pmSess, pmR, h, l, t);
 
+}
+
+// Focus view, on the newest bar: keep only what a decision needs and remove every other line.
+//   1. the nearest untouched pool above price and the nearest below: the two candidate draws
+//   2. the next day / week level beyond each: where price can run once the first pool is taken
+//   3. the most recent sweep: which side was just raided
+function renderFocus(c: f64): void {
+  let a1 = -1; let a2 = -1; let b1 = -1; let b2 = -1; let sw = -1;
+  for (let i = 0; i < cap; i += 1) {
+    const st = unchecked(lvState[i]);
+    if (st == 0) continue;
+    const price = unchecked(lvPrice[i]);
+    if (st == 2) {
+      if (sw < 0) { sw = i; continue; }
+      const ti = unchecked(lvSweptTs[i]); const tw = unchecked(lvSweptTs[sw]);
+      // the latest sweep; when one candle took several levels, the day / week level stands for it
+      if (ti > tw || (ti == tw && (unchecked(lvMask[i]) & KEY_MASK) != 0 && (unchecked(lvMask[sw]) & KEY_MASK) == 0)) sw = i;
+      continue;
+    }
+    if (unchecked(lvHigh[i]) == 1) { if (price >= c && (a1 < 0 || price < unchecked(lvPrice[a1]))) a1 = i; }
+    else if (price <= c && (b1 < 0 || price > unchecked(lvPrice[b1]))) b1 = i;
+  }
+  for (let i = 0; i < cap; i += 1) {
+    if (unchecked(lvState[i]) != 1 || (unchecked(lvMask[i]) & KEY_MASK) == 0) continue;
+    const price = unchecked(lvPrice[i]);
+    if (unchecked(lvHigh[i]) == 1) {
+      if (a1 >= 0 && price > unchecked(lvPrice[a1]) && (a2 < 0 || price < unchecked(lvPrice[a2]))) a2 = i;
+    } else if (b1 >= 0 && price < unchecked(lvPrice[b1]) && (b2 < 0 || price > unchecked(lvPrice[b2]))) b2 = i;
+  }
+  for (let i = 0; i < cap; i += 1) {
+    if (unchecked(lvState[i]) != 0 && (i == a1 || i == a2 || i == b1 || i == b2 || i == sw)) paint(i);
+    else unpaint(i);
+  }
 }
 
 let backfilled = false;
@@ -505,6 +555,8 @@ function onBar(): void {
   out_ssl_swept(f64(ssl));
   out_nearest_bsl(above >= 0 ? unchecked(lvPrice[above]) : NaN);
   out_nearest_ssl(below >= 0 ? unchecked(lvPrice[below]) : NaN);
+
+  if (!review && bar.isLast()) renderFocus(c);
 
   if (showHud && bar.isLast()) {
     sb_clear();
