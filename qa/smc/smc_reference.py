@@ -46,6 +46,7 @@ def run(bars, swings_length=50, atr_filter=True, mitigation_close=False, conflue
     atr = NA; tr_values = []; tr_cum = 0.0; fvg_cum = 0.0
 
     for i, (t, o, h, l, c) in enumerate(bars):
+        fired = set()  # Pine's alerts are one flag per bar, so an event is counted once per bar
         # volatility measure
         if i >= 1:
             pc = bars[i - 1][4]
@@ -111,7 +112,7 @@ def run(bars, swings_length=50, atr_filter=True, mitigation_close=False, conflue
                 if not (crossed and not p.crossed and extra): continue
                 against = BEARISH if side == "bull" else BULLISH
                 choch = trend[name] == against
-                counts[("i" if internal else "s") + ("b" if side == "bull" else "s") + ("c" if choch else "b")] += 1
+                fired.add(("i" if internal else "s") + ("b" if side == "bull" else "s") + ("c" if choch else "b"))
                 p.crossed = True
                 trend[name] = BULLISH if side == "bull" else BEARISH
                 last_structure[(name, side)] = dict(level=lv, t1=p.time, t2=t, choch=choch)
@@ -132,8 +133,8 @@ def run(bars, swings_length=50, atr_filter=True, mitigation_close=False, conflue
             lst = obs[name]; k = 0
             while k < len(lst):
                 b = lst[k]; gone = False
-                if bear_src > b["top"] and b["bias"] == BEARISH: gone = True; counts["iobe" if name == "internal" else "sobe"] += 1
-                elif bull_src < b["bottom"] and b["bias"] == BULLISH: gone = True; counts["iobu" if name == "internal" else "sobu"] += 1
+                if bear_src > b["top"] and b["bias"] == BEARISH: gone = True; fired.add("iobe" if name == "internal" else "sobe")
+                elif bull_src < b["bottom"] and b["bias"] == BULLISH: gone = True; fired.add("iobu" if name == "internal" else "sobu")
                 if gone: lst.pop(k)
                 k += 1
 
@@ -146,9 +147,10 @@ def run(bars, swings_length=50, atr_filter=True, mitigation_close=False, conflue
                 threshold = fvg_cum / i * 2 if fvg_auto else 0.0
                 h2, l2 = highs[i - 2], lows[i - 2]
                 if l > h2 and pcl > h2 and delta > threshold:
-                    counts["fvgu"] += 1; fvgs.insert(0, dict(top=l, bottom=h2, t1=pt, t2=t + fvg_extend * bar_sec, bias=BULLISH)); del fvgs[100:]
+                    fired.add("fvgu"); fvgs.insert(0, dict(top=l, bottom=h2, t1=pt, t2=t + fvg_extend * bar_sec, bias=BULLISH)); del fvgs[100:]
                 if h < l2 and pcl < l2 and -delta > threshold:
-                    counts["fvge"] += 1; fvgs.insert(0, dict(top=h, bottom=l2, t1=pt, t2=t + fvg_extend * bar_sec, bias=BEARISH)); del fvgs[100:]
+                    fired.add("fvge"); fvgs.insert(0, dict(top=h, bottom=l2, t1=pt, t2=t + fvg_extend * bar_sec, bias=BEARISH)); del fvgs[100:]
+        for k in fired: counts[k] += 1
 
     n = len(bars) - 1
     return dict(index=n, trend=trend, atr=atr, trailing=trailing, counts=counts, obs=obs, fvgs=fvgs, last_structure=last_structure,

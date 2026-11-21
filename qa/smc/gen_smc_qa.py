@@ -50,7 +50,11 @@ A1 = 'string("tag", { max_bytes: 32 });'; A2 = 'function onBar(): void {'; A3 = 
 for a in (A1, A2, A3, A4, A5): assert src.count(a) == 1, a
 qa = src.replace(A1, decl + '\n' + A1).replace(A2, helpers + A2).replace(A3, count + A3)
 qa = qa.replace(A4, A4 + '  showFvg = true; showSwingOb = true; showZones = true; showSwings = true; present = true; // QA: everything on\n')
-qa = qa.replace(A5, A5[:-1] + dump + '}')
+# The dump is written on the newest bar INSTEAD of evaluating it: the bar is still forming, so the state
+# dumped is the state after the last closed bar, which a reference can reproduce exactly.
+A6 = '  if (isNaN(h) || isNaN(l) || isNaN(c)) return;\n'
+assert src.count(A6) == 1
+qa = qa.replace(A6, A6 + dump.replace('  if (bar.isLast()) {\n', '  if (bar.isLast()) { // QA: dump and stop\n').replace('\n  }\n', '\n    return;\n  }\n'))
 open('smc-qa.wrun.ts', 'w', encoding='utf-8').write(qa)
-json.dump(dict(names=[n for n, _ in F], decl=decl, helpers=helpers, count=count, dump=dump, A=[A1, A2, A3, A4, A5], srcLen=len(src), srcSum=sum(map(ord, src)), qaLen=len(qa), qaSum=sum(map(ord, qa))), open('smc-qa.json', 'w'))
+json.dump(dict(names=[n for n, _ in F], decl=decl, helpers=helpers, count=count, dump=dump, A=[A1, A2, A3, A4, A5, A6], srcLen=len(src), srcSum=sum(map(ord, src)), qaLen=len(qa), qaSum=sum(map(ord, qa))), open('smc-qa.json', 'w'))
 print(len(F), 'fields; clean', len(src), sum(map(ord, src)), 'qa', len(qa), sum(map(ord, qa)))

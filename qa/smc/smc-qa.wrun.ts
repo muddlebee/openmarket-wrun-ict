@@ -589,51 +589,7 @@ function qm(x: f64): f64 { return isNaN(x) ? NaN : (x - QA_BASE) / 60.0; }
 function onBar(): void {
   const t = bar.time(); const o = bar.open(); const h = bar.high(); const l = bar.low(); const c = bar.close();
   if (isNaN(h) || isNaN(l) || isNaN(c)) return;
-  aIBB = 0; aIBC = 0; aISB = 0; aISC = 0; aSBB = 0; aSBC = 0; aSSB = 0; aSSC = 0;
-  aIOBu = 0; aIOBe = 0; aSOBu = 0; aSOBe = 0; aFVGu = 0; aFVGe = 0;
-
-  // Volatility: Pine ta.atr(200) (Wilder's average, first value on the 201st bar), or the mean true range so far.
-  if (idx >= 1) {
-    const tr = Math.max(h - l, Math.max(Math.abs(h - prevClose), Math.abs(l - prevClose)));
-    trCum += tr; trN += 1;
-    if (trN <= 200) { trSum += tr; if (trN == 200) atr = trSum / 200.0; }
-    else atr = (atr * 199.0 + tr) / 200.0;
-  }
-  const vol = obFilterAtr ? atr : (idx >= 1 ? trCum / f64(idx) : NaN);
-  const wild = !isNaN(vol) && (h - l) >= 2.0 * vol; // a high volatility bar: its high and low swap for order blocks
-  const s = idx & (RING - 1);
-  rH[s] = h; rL[s] = l; rPH[s] = wild ? l : h; rPL[s] = wild ? h : l; rT[s] = t;
-
-  if (showHighLow || showZones) {
-    // Pine math.max / math.min give na while a side has no swing yet
-    if (!isNaN(trTop)) { if (h > trTop) trTop = h; if (trTop == h) trTopT = t; }
-    if (!isNaN(trBottom)) { if (l < trBottom) trBottom = l; if (trBottom == l) trBottomT = t; }
-  }
-  hlTop = trTop; hlBottom = trBottom; hlTopT = trTopT; hlBottomT = trBottomT; hlTrend = unchecked(trend[0]); znT = trT; znIdx = trIdx;
-
-  if (showFvg) deleteFairValueGaps(h, l);
-
-  currentStructure(swingsLength, false);
-  currentStructure(5, true);
-  if (showInternals || showInternalOb) displayStructure(true, t, o, h, l, c);
-  if (showStructure || showSwingOb || showHighLow) displayStructure(false, t, o, h, l, c);
-  if (showInternalOb) deleteOrderBlocks(true, obMitigationClose ? c : h, obMitigationClose ? c : l);
-  if (showSwingOb) deleteOrderBlocks(false, obMitigationClose ? c : h, obMitigationClose ? c : l);
-  if (showFvg) fairValueGaps(t, h, l);
-
-  out_internal_bullish_bos(f64(aIBB)); out_internal_bullish_choch(f64(aIBC)); out_internal_bearish_bos(f64(aISB)); out_internal_bearish_choch(f64(aISC));
-  out_bullish_bos(f64(aSBB)); out_bullish_choch(f64(aSBC)); out_bearish_bos(f64(aSSB)); out_bearish_choch(f64(aSSC));
-  out_bullish_internal_ob_break(f64(aIOBu)); out_bearish_internal_ob_break(f64(aIOBe)); out_bullish_swing_ob_break(f64(aSOBu)); out_bearish_swing_ob_break(f64(aSOBe));
-  out_bullish_fvg(f64(aFVGu)); out_bearish_fvg(f64(aFVGe));
-
-  if (isNaN(qaFirst)) qaFirst = t;
-  qaCount[0] += aIBB; qaCount[1] += aIBC; qaCount[2] += aISB; qaCount[3] += aISC; qaCount[4] += aSBB; qaCount[5] += aSBC; qaCount[6] += aSSB; qaCount[7] += aSSC;
-  qaCount[8] += aIOBu; qaCount[9] += aIOBe; qaCount[10] += aSOBu; qaCount[11] += aSOBe; qaCount[12] += aFVGu; qaCount[13] += aFVGe;
-  if (bar.isLast()) render(t);
-
-  prevOpen = o; prevClose = c; prevT = t;
-  idx += 1;
-  if (bar.isLast()) {
+  if (bar.isLast()) { // QA: dump and stop
     out_z0(qm(qaFirst));
     out_z1(f64(idx - 1));
     out_z2(f64(unchecked(trend[0]) + 1));
@@ -789,5 +745,50 @@ function onBar(): void {
     out_z152(unchecked(stKind[3]) != 0 ? qf(unchecked(stLevel[3])) : NaN);
     out_z153(unchecked(stKind[3]) != 0 ? qm(unchecked(stT1[3])) : NaN);
     out_z154(unchecked(stKind[3]) != 0 ? qm(unchecked(stT2[3])) : NaN);
+    return;
   }
+  aIBB = 0; aIBC = 0; aISB = 0; aISC = 0; aSBB = 0; aSBC = 0; aSSB = 0; aSSC = 0;
+  aIOBu = 0; aIOBe = 0; aSOBu = 0; aSOBe = 0; aFVGu = 0; aFVGe = 0;
+
+  // Volatility: Pine ta.atr(200) (Wilder's average, first value on the 201st bar), or the mean true range so far.
+  if (idx >= 1) {
+    const tr = Math.max(h - l, Math.max(Math.abs(h - prevClose), Math.abs(l - prevClose)));
+    trCum += tr; trN += 1;
+    if (trN <= 200) { trSum += tr; if (trN == 200) atr = trSum / 200.0; }
+    else atr = (atr * 199.0 + tr) / 200.0;
+  }
+  const vol = obFilterAtr ? atr : (idx >= 1 ? trCum / f64(idx) : NaN);
+  const wild = !isNaN(vol) && (h - l) >= 2.0 * vol; // a high volatility bar: its high and low swap for order blocks
+  const s = idx & (RING - 1);
+  rH[s] = h; rL[s] = l; rPH[s] = wild ? l : h; rPL[s] = wild ? h : l; rT[s] = t;
+
+  if (showHighLow || showZones) {
+    // Pine math.max / math.min give na while a side has no swing yet
+    if (!isNaN(trTop)) { if (h > trTop) trTop = h; if (trTop == h) trTopT = t; }
+    if (!isNaN(trBottom)) { if (l < trBottom) trBottom = l; if (trBottom == l) trBottomT = t; }
+  }
+  hlTop = trTop; hlBottom = trBottom; hlTopT = trTopT; hlBottomT = trBottomT; hlTrend = unchecked(trend[0]); znT = trT; znIdx = trIdx;
+
+  if (showFvg) deleteFairValueGaps(h, l);
+
+  currentStructure(swingsLength, false);
+  currentStructure(5, true);
+  if (showInternals || showInternalOb) displayStructure(true, t, o, h, l, c);
+  if (showStructure || showSwingOb || showHighLow) displayStructure(false, t, o, h, l, c);
+  if (showInternalOb) deleteOrderBlocks(true, obMitigationClose ? c : h, obMitigationClose ? c : l);
+  if (showSwingOb) deleteOrderBlocks(false, obMitigationClose ? c : h, obMitigationClose ? c : l);
+  if (showFvg) fairValueGaps(t, h, l);
+
+  out_internal_bullish_bos(f64(aIBB)); out_internal_bullish_choch(f64(aIBC)); out_internal_bearish_bos(f64(aISB)); out_internal_bearish_choch(f64(aISC));
+  out_bullish_bos(f64(aSBB)); out_bullish_choch(f64(aSBC)); out_bearish_bos(f64(aSSB)); out_bearish_choch(f64(aSSC));
+  out_bullish_internal_ob_break(f64(aIOBu)); out_bearish_internal_ob_break(f64(aIOBe)); out_bullish_swing_ob_break(f64(aSOBu)); out_bearish_swing_ob_break(f64(aSOBe));
+  out_bullish_fvg(f64(aFVGu)); out_bearish_fvg(f64(aFVGe));
+
+  if (isNaN(qaFirst)) qaFirst = t;
+  qaCount[0] += aIBB; qaCount[1] += aIBC; qaCount[2] += aISB; qaCount[3] += aISC; qaCount[4] += aSBB; qaCount[5] += aSBC; qaCount[6] += aSSB; qaCount[7] += aSSC;
+  qaCount[8] += aIOBu; qaCount[9] += aIOBe; qaCount[10] += aSOBu; qaCount[11] += aSOBe; qaCount[12] += aFVGu; qaCount[13] += aFVGe;
+  if (bar.isLast()) render(t);
+
+  prevOpen = o; prevClose = c; prevT = t;
+  idx += 1;
 }
