@@ -2,3 +2,6 @@ qa-build.wrun.ts
 qa-transform.js
 __pycache__/
 *.json
+!smc/data_*.json
+smc/smc-qa.wrun.ts
+!smc/smc-qa.json

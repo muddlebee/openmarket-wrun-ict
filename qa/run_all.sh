@@ -6,5 +6,6 @@ for f in dumps/run1_live.txt dumps/run2_past_15m.txt dumps/run3_past_1h.txt dump
   echo "== $f"; python3 compare.py "$f" || fail=1
 done
 echo "== dumps/run5_focus.txt"; python3 focus_check.py dumps/run5_focus.txt || fail=1
+echo "== smc/dumps/run2_binance.txt (Smart Money Concepts port)"; (cd smc && python3 smc_compare.py dumps/run2_binance.txt) || fail=1
 [ $fail = 0 ] && echo "ALL CHECKS PASS" || echo "SOME CHECKS FAILED"
 exit $fail

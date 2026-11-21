@@ -1,4 +1,12 @@
-# ICT Liquidity Map for OpenMarket (wrun)
+# OpenMarket indicators (wrun)
+
+Two custom indicators for openmarket.xyz:
+
+- **ICT Liquidity Map** (`ict-liquidity-map.wrun.ts`): the rest of this page.
+- **Smart Money Concepts** (`smart-money-concepts.wrun.ts`): a port of LuxAlgo's Pine script. See
+  [Smart Money Concepts](#smart-money-concepts) at the end.
+
+# ICT Liquidity Map
 
 A custom OpenMarket indicator that marks the liquidity pools an ICT trader works from, and which of them have
 been raided: previous day and week highs and lows, older untouched daily levels, Asia / London / New York
@@ -94,3 +102,46 @@ when those are too coarse:
 See [qa/README.md](qa/README.md). In short: 34 engine states (live on five timeframes, past moments replayed on
 three, every "Day starts" setting) match an independent reference exactly, and the Focus view draws the lines
 its rules call for in 3 of 3 checks.
+
+# Smart Money Concepts
+
+`smart-money-concepts.wrun.ts` is a wrun port of "Smart Money Concepts [LuxAlgo]" (Pine Script v5), © LuxAlgo.
+The original and this port are licensed under
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/): attribution, non-commercial use, and
+the same licence for anything built from it. That licence covers this one file, not the ICT Liquidity Map.
+
+Default view (Present mode): the latest structure breaks, internal order blocks, strong / weak high and low.
+
+![Smart Money Concepts, default](docs/smc-default.png)
+
+Everything switched on: swing order blocks, fair value gaps, premium / discount zones.
+
+![Smart Money Concepts, everything on](docs/smc-all-on.png)
+
+Historical mode with swing point labels.
+
+![Smart Money Concepts, Historical](docs/smc-historical.png)
+
+| Ported | Notes |
+|---|---|
+| Internal and swing structure (BOS / CHoCH) | With the All / BOS / CHoCH filters and the confluence filter |
+| Swing point labels (HH, HL, LH, LL) | Off by default, as in the original |
+| Strong / weak high and low | |
+| Internal and swing order blocks | ATR or cumulative mean range filter; mitigation by close or by high / low |
+| Fair value gaps | On the chart's own timeframe only. Off by default, as in the original |
+| Premium / discount zones | Off by default, as in the original |
+| 14 alerts | The same conditions as the original |
+
+Left out: equal highs / lows and the daily / weekly / monthly levels (the ICT Liquidity Map draws those),
+candle colouring, and fair value gaps from another timeframe.
+
+Differences from the original:
+
+- **Mode defaults to Present** (the original defaults to Historical). Historical keeps the newest 116 structure
+  breaks and 38 swing labels; fair value gaps keep the newest 100.
+- **Order block boxes that are no longer among the newest few are removed.** The original leaves stale boxes
+  on the chart when the list shrinks.
+- A fair value gap is one box, not two halves.
+
+QA: [qa/smc/README.md](qa/smc/README.md). On 5m, 15m and 1h, with default and non-default settings, all 153
+state values match a separate Python re-implementation of the Pine logic.
