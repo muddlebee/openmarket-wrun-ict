@@ -15,48 +15,48 @@ param.choice("style", ["Colored", "Monochrome"], "Colored", { label: "Style", de
 
 section("Real time internal structure");
 param.bool("show_internals", true, { label: "Show internal structure" });
-param.choice("internal_bull", ["All", "BOS", "CHoCH"], "All", { label: "Bullish structure" });
-param.color("internal_bull_color", "#089981", { label: "Bullish color" });
-param.choice("internal_bear", ["All", "BOS", "CHoCH"], "All", { label: "Bearish structure" });
-param.color("internal_bear_color", "#F23645", { label: "Bearish color" });
-param.bool("internal_confluence", false, { label: "Confluence filter", description: "Filter non significant internal structure breakouts" });
-param.int("internal_label_size", 9, { min: 6, max: 20, label: "Internal label size" });
+param.choice("internal_bull", ["All", "BOS", "CHoCH"], "All", { when: "show_internals", label: "Bullish structure" });
+param.color("internal_bull_color", "#089981", { when: "show_internals", label: "Bullish color" });
+param.choice("internal_bear", ["All", "BOS", "CHoCH"], "All", { when: "show_internals", label: "Bearish structure" });
+param.color("internal_bear_color", "#F23645", { when: "show_internals", label: "Bearish color" });
+param.bool("internal_confluence", false, { when: "show_internals", label: "Confluence filter", description: "Filter non significant internal structure breakouts" });
+param.int("internal_label_size", 9, { when: "show_internals", min: 6, max: 20, label: "Internal label size" });
 
 section("Real time swing structure");
 param.bool("show_structure", true, { label: "Show swing structure" });
-param.choice("swing_bull", ["All", "BOS", "CHoCH"], "All", { label: "Bullish structure" });
+param.choice("swing_bull", ["All", "BOS", "CHoCH"], "All", { when: "show_structure", label: "Bullish structure" });
 param.color("swing_bull_color", "#089981", { label: "Bullish color" });
-param.choice("swing_bear", ["All", "BOS", "CHoCH"], "All", { label: "Bearish structure" });
+param.choice("swing_bear", ["All", "BOS", "CHoCH"], "All", { when: "show_structure", label: "Bearish structure" });
 param.color("swing_bear_color", "#F23645", { label: "Bearish color" });
-param.int("swing_label_size", 11, { min: 6, max: 20, label: "Swing label size" });
+param.int("swing_label_size", 11, { when: "show_structure", min: 6, max: 20, label: "Swing label size" });
 param.bool("show_swings", false, { label: "Show swing points", description: "HH / HL / LH / LL labels on swing points" });
 param.int("swings_length", 50, { min: 10, max: 200, label: "Swing length (bars)" });
 param.bool("show_high_low", true, { label: "Show strong / weak high / low" });
 
 section("Order blocks");
 param.bool("show_internal_ob", true, { label: "Internal order blocks" });
-param.int("internal_ob_count", 5, { min: 1, max: 20, label: "Internal order blocks shown" });
+param.int("internal_ob_count", 5, { when: "show_internal_ob", min: 1, max: 20, label: "Internal order blocks shown" });
 param.bool("show_swing_ob", false, { label: "Swing order blocks" });
-param.int("swing_ob_count", 5, { min: 1, max: 20, label: "Swing order blocks shown" });
+param.int("swing_ob_count", 5, { when: "show_swing_ob", min: 1, max: 20, label: "Swing order blocks shown" });
 param.choice("ob_filter", ["Atr", "Cumulative Mean Range"], "Atr", { label: "Order block filter", description: "Method used to filter out volatile order blocks" });
 param.choice("ob_mitigation", ["Close", "High/Low"], "High/Low", { label: "Order block mitigation" });
-param.color("internal_bull_ob_color", "#3179F5", { label: "Internal bullish OB" });
-param.color("internal_bear_ob_color", "#F77C80", { label: "Internal bearish OB" });
-param.color("swing_bull_ob_color", "#1848CC", { label: "Bullish OB" });
-param.color("swing_bear_ob_color", "#B22833", { label: "Bearish OB" });
+param.color("internal_bull_ob_color", "#3179F5", { when: "show_internal_ob", label: "Internal bullish OB" });
+param.color("internal_bear_ob_color", "#F77C80", { when: "show_internal_ob", label: "Internal bearish OB" });
+param.color("swing_bull_ob_color", "#1848CC", { when: "show_swing_ob", label: "Bullish OB" });
+param.color("swing_bear_ob_color", "#B22833", { when: "show_swing_ob", label: "Bearish OB" });
 
 section("Fair value gaps");
 param.bool("show_fvg", false, { label: "Fair value gaps" });
-param.bool("fvg_auto", true, { label: "Auto threshold", description: "Filter out non significant fair value gaps" });
-param.int("fvg_extend", 1, { min: 0, max: 50, label: "Extend FVG (bars)" });
-param.color("fvg_bull_color", "#00FF68", { label: "Bullish FVG" });
-param.color("fvg_bear_color", "#FF0008", { label: "Bearish FVG" });
+param.bool("fvg_auto", true, { when: "show_fvg", label: "Auto threshold", description: "Filter out non significant fair value gaps" });
+param.int("fvg_extend", 1, { when: "show_fvg", min: 0, max: 50, label: "Extend FVG (bars)" });
+param.color("fvg_bull_color", "#00FF68", { when: "show_fvg", label: "Bullish FVG" });
+param.color("fvg_bear_color", "#FF0008", { when: "show_fvg", label: "Bearish FVG" });
 
 section("Premium & discount zones");
 param.bool("show_zones", false, { label: "Premium / discount zones" });
-param.color("premium_color", "#F23645", { label: "Premium zone" });
-param.color("equilibrium_color", "#878B94", { label: "Equilibrium zone" });
-param.color("discount_color", "#089981", { label: "Discount zone" });
+param.color("premium_color", "#F23645", { when: "show_zones", label: "Premium zone" });
+param.color("equilibrium_color", "#878B94", { when: "show_zones", label: "Equilibrium zone" });
+param.color("discount_color", "#089981", { when: "show_zones", label: "Discount zone" });
 
 input("high", ohlcv.high);
 chart.interval_sec();
@@ -75,20 +75,20 @@ const gSOBu = output("bullish_swing_ob_break", none, overlay, { description: "1 
 const gSOBe = output("bearish_swing_ob_break", none, overlay, { description: "1 when price breaks a bearish swing order block" });
 const gFVGu = output("bullish_fvg", none, overlay, { description: "1 on a new bullish fair value gap" });
 const gFVGe = output("bearish_fvg", none, overlay, { description: "1 on a new bearish fair value gap" });
-alert("internal_bullish_bos", { when: gIBB, title: "Internal Bullish BOS", message: "{{symbol}}: internal bullish BOS formed" });
-alert("internal_bullish_choch", { when: gIBC, title: "Internal Bullish CHoCH", message: "{{symbol}}: internal bullish CHoCH formed" });
-alert("internal_bearish_bos", { when: gISB, title: "Internal Bearish BOS", message: "{{symbol}}: internal bearish BOS formed" });
-alert("internal_bearish_choch", { when: gISC, title: "Internal Bearish CHoCH", message: "{{symbol}}: internal bearish CHoCH formed" });
-alert("bullish_bos", { when: gSBB, title: "Bullish BOS", message: "{{symbol}}: bullish BOS formed" });
-alert("bullish_choch", { when: gSBC, title: "Bullish CHoCH", message: "{{symbol}}: bullish CHoCH formed" });
-alert("bearish_bos", { when: gSSB, title: "Bearish BOS", message: "{{symbol}}: bearish BOS formed" });
-alert("bearish_choch", { when: gSSC, title: "Bearish CHoCH", message: "{{symbol}}: bearish CHoCH formed" });
-alert("bullish_internal_ob_break", { when: gIOBu, title: "Bullish Internal OB Breakout", message: "{{symbol}}: price broke a bullish internal OB" });
-alert("bearish_internal_ob_break", { when: gIOBe, title: "Bearish Internal OB Breakout", message: "{{symbol}}: price broke a bearish internal OB" });
-alert("bullish_swing_ob_break", { when: gSOBu, title: "Bullish Swing OB Breakout", message: "{{symbol}}: price broke a bullish swing OB" });
-alert("bearish_swing_ob_break", { when: gSOBe, title: "Bearish Swing OB Breakout", message: "{{symbol}}: price broke a bearish swing OB" });
-alert("bullish_fvg", { when: gFVGu, title: "Bullish FVG", message: "{{symbol}}: bullish FVG formed" });
-alert("bearish_fvg", { when: gFVGe, title: "Bearish FVG", message: "{{symbol}}: bearish FVG formed" });
+alert("internal_bullish_bos_alert", { when: gIBB, title: "Internal Bullish BOS", message: "{{symbol}}: internal bullish BOS formed" });
+alert("internal_bullish_choch_alert", { when: gIBC, title: "Internal Bullish CHoCH", message: "{{symbol}}: internal bullish CHoCH formed" });
+alert("internal_bearish_bos_alert", { when: gISB, title: "Internal Bearish BOS", message: "{{symbol}}: internal bearish BOS formed" });
+alert("internal_bearish_choch_alert", { when: gISC, title: "Internal Bearish CHoCH", message: "{{symbol}}: internal bearish CHoCH formed" });
+alert("bullish_bos_alert", { when: gSBB, title: "Bullish BOS", message: "{{symbol}}: bullish BOS formed" });
+alert("bullish_choch_alert", { when: gSBC, title: "Bullish CHoCH", message: "{{symbol}}: bullish CHoCH formed" });
+alert("bearish_bos_alert", { when: gSSB, title: "Bearish BOS", message: "{{symbol}}: bearish BOS formed" });
+alert("bearish_choch_alert", { when: gSSC, title: "Bearish CHoCH", message: "{{symbol}}: bearish CHoCH formed" });
+alert("bullish_internal_ob_break_alert", { when: gIOBu, title: "Bullish Internal OB Breakout", message: "{{symbol}}: price broke a bullish internal OB" });
+alert("bearish_internal_ob_break_alert", { when: gIOBe, title: "Bearish Internal OB Breakout", message: "{{symbol}}: price broke a bearish internal OB" });
+alert("bullish_swing_ob_break_alert", { when: gSOBu, title: "Bullish Swing OB Breakout", message: "{{symbol}}: price broke a bullish swing OB" });
+alert("bearish_swing_ob_break_alert", { when: gSOBe, title: "Bearish Swing OB Breakout", message: "{{symbol}}: price broke a bearish swing OB" });
+alert("bullish_fvg_alert", { when: gFVGu, title: "Bullish FVG", message: "{{symbol}}: bullish FVG formed" });
+alert("bearish_fvg_alert", { when: gFVGe, title: "Bearish FVG", message: "{{symbol}}: bearish FVG formed" });
 
 string("tag", { max_bytes: 32 });
 handles.line({ width: 1, line_style: "solid" });
@@ -187,13 +187,16 @@ function onStart(): void {
   showSwingOb = pb_show_swing_ob(); swingObCount = i32(p_swing_ob_count());
   obFilterAtr = i32(p_ob_filter()) == 0; obMitigationClose = i32(p_ob_mitigation()) == 0;
   showFvg = pb_show_fvg(); fvgAuto = pb_fvg_auto(); fvgExtend = p_fvg_extend(); showZones = pb_show_zones();
-  inkIBull = mono ? MONO_BULLISH : fromPacked(p_internal_bull_color()); inkIBear = mono ? MONO_BEARISH : fromPacked(p_internal_bear_color());
-  inkSBull = mono ? MONO_BULLISH : fromPacked(p_swing_bull_color()); inkSBear = mono ? MONO_BEARISH : fromPacked(p_swing_bear_color());
-  inkIObBull = mono ? MONO_BULLISH : fromPacked(p_internal_bull_ob_color()); inkIObBear = mono ? MONO_BEARISH : fromPacked(p_internal_bear_ob_color());
-  inkSObBull = mono ? MONO_BULLISH : fromPacked(p_swing_bull_ob_color()); inkSObBear = mono ? MONO_BEARISH : fromPacked(p_swing_bear_ob_color());
-  inkFvgBull = mono ? MONO_BULLISH : fromPacked(p_fvg_bull_color()); inkFvgBear = mono ? MONO_BEARISH : fromPacked(p_fvg_bear_color());
-  inkPremium = mono ? MONO_BEARISH : fromPacked(p_premium_color()); inkEq = fromPacked(p_equilibrium_color());
-  inkDiscount = mono ? MONO_BULLISH : fromPacked(p_discount_color());
+  inkIBull = fromPacked(p_internal_bull_color()); inkIBear = fromPacked(p_internal_bear_color());
+  inkSBull = fromPacked(p_swing_bull_color()); inkSBear = fromPacked(p_swing_bear_color());
+  inkIObBull = fromPacked(p_internal_bull_ob_color()); inkIObBear = fromPacked(p_internal_bear_ob_color());
+  inkSObBull = fromPacked(p_swing_bull_ob_color()); inkSObBear = fromPacked(p_swing_bear_ob_color());
+  inkFvgBull = fromPacked(p_fvg_bull_color()); inkFvgBear = fromPacked(p_fvg_bear_color());
+  inkPremium = fromPacked(p_premium_color()); inkEq = fromPacked(p_equilibrium_color()); inkDiscount = fromPacked(p_discount_color());
+  if (mono) { // the Monochrome theme replaces every bullish and bearish colour
+    inkIBull = MONO_BULLISH; inkSBull = MONO_BULLISH; inkIObBull = MONO_BULLISH; inkSObBull = MONO_BULLISH; inkFvgBull = MONO_BULLISH; inkDiscount = MONO_BULLISH;
+    inkIBear = MONO_BEARISH; inkSBear = MONO_BEARISH; inkIObBear = MONO_BEARISH; inkSObBear = MONO_BEARISH; inkFvgBear = MONO_BEARISH; inkPremium = MONO_BEARISH;
+  }
   barSec = p_chart_interval_sec();
   for (let k = 0; k < 4; k += 1) { pvCur[k] = NaN; pvLast[k] = NaN; pvPrev[k] = NaN; }
 }
